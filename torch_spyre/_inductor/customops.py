@@ -16,7 +16,7 @@ from typing import Optional, Sequence
 import torch
 from torch_spyre.ops.fallbacks import warn_fallback
 
-from torch_spyre._inductor.errors import Unsupported
+from .errors import Unsupported
 
 
 @torch.library.custom_op("spyre::compact", mutates_args=())

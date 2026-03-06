@@ -17,8 +17,8 @@ from contextlib import contextmanager
 from typing import Callable, Optional, Sequence, Union
 import torch
 import torch._decomp as decomp
-from torch_spyre._inductor.errors import Unsupported
-from torch_spyre.ops import customops  # noqa: F401
+from .errors import Unsupported
+from . import customops  # noqa: F401
 
 import threading
 

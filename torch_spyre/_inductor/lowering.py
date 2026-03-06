@@ -22,14 +22,14 @@ import torch._inductor.lowering as lowering
 
 from typing import Any, Callable, Union
 
-from torch_spyre._inductor.constants import MATMUL_REDUCTION_OP, BATCH_MATMUL_OP
-import torch_spyre.ops.customops  # noqa: F401
+from .constants import MATMUL_REDUCTION_OP, BATCH_MATMUL_OP
+import torch_spyre._inductor.customops  # noqa: F401
 from torch_spyre.ops.fallbacks import fallback_ops
-from torch_spyre._inductor.ir import SpyreReduction
+from .ir import SpyreReduction
 from torch._inductor.virtualized import V
-from torch_spyre._inductor.errors import Unsupported
+from .errors import Unsupported
 import threading
-from torch_spyre._inductor.logging_utils import get_inductor_logger
+from .logging_utils import get_inductor_logger
 import logging
 
 logger = get_inductor_logger("lowering")

@@ -61,15 +61,15 @@ def enable_spyre_context(
     if decomps is None:
         decomps = torch._inductor.decomposition.decompositions
 
-    from torch_spyre.ops.lowering import enable_spyre_lowerings  # your CM
+    from torch_spyre._inductor.lowering import enable_spyre_lowerings  # your CM
 
     # Ensure decorators run (custom ops/decomp/lowerings modules)
-    import torch_spyre.ops.customops  # noqa: F401
-    from torch_spyre.ops.decompositions import (
+    import torch_spyre._inductor.customops  # noqa: F401
+    from torch_spyre._inductor.decompositions import (
         enable_spyre_decompositions,
     )
 
-    import torch_spyre.ops.lowering  # noqa: F401
+    import torch_spyre._inductor.lowering  # noqa: F401
     from torch_spyre._inductor.choices import SpyreHeuristics
     from torch_spyre._inductor.passes import (
         CustomPrePasses,
