@@ -17,8 +17,8 @@ from contextlib import contextmanager
 from typing import Callable, Optional, Sequence, Union
 import torch
 import torch._decomp as decomp
-from .errors import Unsupported
-from . import customops  # noqa: F401
+from torch_spyre._inductor.errors import Unsupported
+from torch_spyre.ops import customops  # noqa: F401
 
 import threading
 
@@ -71,7 +71,7 @@ def enable_spyre_decompositions(
         decomps = torch._inductor.decomposition.decompositions
 
     with _decompositions_lock:
-        from torch_spyre.fallbacks import fallback_ops
+        from torch_spyre.ops.fallbacks import fallback_ops
         from torch._ops import OpOverload, OpOverloadPacket
 
         # Helper function to remove ops from decompositions

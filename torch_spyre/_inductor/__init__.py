@@ -121,7 +121,7 @@ def enable_spyre_compile_fx_wrapper():
 
 
 def _light_autoload():
-    from . import decompositions  # noqa: F401
+    from torch_spyre.ops import decompositions  # noqa: F401
 
     enable_spyre_compile_fx_wrapper()
 
@@ -135,7 +135,7 @@ def _autoload():
             return
         from torch._dynamo.device_interface import register_interface_for_device
 
-        from torch_spyre.utils.device_interface import SpyreInterface
+        from torch_spyre.device.interface import SpyreInterface
 
         register_interface_for_device(DEVICE_NAME, SpyreInterface)
 
@@ -148,7 +148,7 @@ def _autoload():
         from torch._inductor.codegen import cpu_device_op_overrides  # noqa: F401  # usort: skip
         from torch._inductor.codegen.cuda import device_op_overrides  # noqa: F401  # usort: skip
 
-        from torch_spyre.utils.device_op_overrides import SpyreDeviceOpOverrides
+        from torch_spyre.device.op_overrides import SpyreDeviceOpOverrides
 
         register_device_op_overrides(
             device=DEVICE_NAME, device_op_overrides=SpyreDeviceOpOverrides()

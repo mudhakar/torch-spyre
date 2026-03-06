@@ -32,7 +32,7 @@ from torch._inductor.codegen.simd import SIMDKernel
 from torch._inductor.utils import sympy_subs
 from torch._inductor.virtualized import StoreMode, V
 
-from .runtime import ConstantArg, OpSpec, TensorArg
+from torch_spyre.execution import ConstantArg, OpSpec, TensorArg
 from .constants import (
     MATMUL_REDUCTION_OP,
     SPYRE_FP32_OPS,
