@@ -420,6 +420,9 @@ def parse_op_spec(op_spec: OpSpec) -> SDSCSpec:
         op_dim_order,
         op_stick_dim,
     )
+    if op_spec.op_data_format is not None:
+        for sdsc_arg in args:
+            sdsc_arg.data_format = op_spec.op_data_format
     if missing_dim is not None:
         # A dimension was added to the iteration space, update splits and work slices
         dim_splits[missing_dim] = 1
