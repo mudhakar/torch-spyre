@@ -14,7 +14,7 @@
 
 
 import dataclasses
-from typing import Any, Sequence
+from typing import Any, Optional, Sequence
 
 from sympy import Symbol, Expr
 from torch_spyre._C import DataFormats
@@ -61,6 +61,7 @@ class OpSpec:
     iteration_space: dict[Symbol, tuple[Expr, int]]
     args: Sequence[TensorArg]
     op_info: dict[str, Any]
+    op_data_format: Optional[DataFormats] = None
 
 
 @dataclasses.dataclass

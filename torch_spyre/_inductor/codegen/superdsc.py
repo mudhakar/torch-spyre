@@ -444,9 +444,9 @@ def parse_op_spec(op_spec: OpSpec) -> SDSCSpec:
     return SDSCSpec(
         opfunc=_get_op_func(op_spec.op, op_spec.is_reduction, args[-1].scales),
         execution_unit="pt" if is_matmul else "sfp",
-        data_format=op_spec.args[
-            0
-        ].device_dtype,  # TODO: op_spec needs operation data format
+        data_format=op_spec.op_data_format
+        if op_spec.op_data_format is not None
+        else op_spec.args[0].device_dtype,
         num_inputs=num_inputs,
         iteration_space=sdsc_iteration_space,
         num_cores=num_cores,

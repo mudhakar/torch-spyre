@@ -14,6 +14,7 @@
 
 
 from contextlib import contextmanager
+import os
 
 import torch
 
@@ -22,6 +23,7 @@ import torch._inductor.lowering as lowering
 
 from typing import Any, Callable, Union
 
+from torch_spyre._C import DataFormats
 from .constants import BATCH_MATMUL_OP
 import torch_spyre._inductor.customops  # noqa: F401
 from torch_spyre.ops.fallbacks import fallback_ops
@@ -367,12 +369,14 @@ def lower_exx2(x, exx2Scale, useZeroMean):
     kwargs = lowering._make_reduction_inner(
         x, axis=[-1], keepdims=True, dtype=x.dtype, override_return_dtype=None
     )
-    op_info = {
+    op_info: dict = {
         "constants": {
             "exx2scale": exx2Scale,
             "useZeroMean": useZeroMean,
         }
     }
+    if os.environ.get("TORCH_SPYRE_FP32_LAYERNORM", "0") == "1":
+        op_info["op_data_format"] = DataFormats.IEEE_FP32
     result = SpyreReduction.create(
         reduction_type="exx2",
         input_node=x,

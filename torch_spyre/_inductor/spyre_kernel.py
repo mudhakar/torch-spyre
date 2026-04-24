@@ -15,6 +15,7 @@
 from dataclasses import dataclass, field
 from typing import Any, Callable, Self, Sequence, Tuple, Union
 from abc import ABC
+import os
 
 import torch
 import sympy
@@ -180,11 +181,16 @@ class SpyreOpFuncs:
 
     @staticmethod
     def layernormnorm(*args):
-        return PointwiseOp("layernormnorm", list(args))
+        op_info: dict[str, Any] = {}
+        if os.environ.get("TORCH_SPYRE_FP32_LAYERNORM", "0") == "1":
+            op_info["op_data_format"] = DataFormats.IEEE_FP32
+        return PointwiseOp("layernormnorm", list(args), op_info)
 
     @staticmethod
     def layernormscale(x, eps):
-        op_info = {"constants": {"eps": eps}}
+        op_info: dict[str, Any] = {"constants": {"eps": eps}}
+        if os.environ.get("TORCH_SPYRE_FP32_LAYERNORM", "0") == "1":
+            op_info["op_data_format"] = DataFormats.IEEE_FP32
         return PointwiseOp("layernormscale", [x], op_info)
 
     @staticmethod
@@ -422,12 +428,15 @@ class SpyreKernel(Kernel[CSEVariable]):
             k: (v, core_division.get(k, 1)) for k, v in it_space.items()
         }
 
+        op_data_format = op_info.pop("op_data_format", None)
+
         return OpSpec(
             op,
             is_reduction,
             it_space_extended,
             args,
             op_info,
+            op_data_format,
         )
 
     def remove_kernel_local_buffers(self) -> None:
