@@ -27,6 +27,7 @@ def spyre_data_types():
     torch._prims_common._computation_dtype_map = {
         torch.bfloat16: torch.bfloat16,
         torch.float16: torch.float16,
+        torch.float32: torch.float32,
         torch.complex32: torch.complex32,
     }
     try:

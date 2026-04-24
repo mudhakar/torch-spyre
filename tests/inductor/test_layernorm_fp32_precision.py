@@ -61,6 +61,8 @@ def run_cpu_fp16(x, weight, bias):
 
 
 def run_spyre_compiled(x_fp16, weight_fp16, bias_fp16, fp32_layernorm=False):
+    import shutil
+    import torch._inductor
     import torch_spyre  # noqa: F401
 
     device = torch.device("spyre")
@@ -72,12 +74,16 @@ def run_spyre_compiled(x_fp16, weight_fp16, bias_fp16, fp32_layernorm=False):
         {"TORCH_SPYRE_FP32_LAYERNORM": "1"} if fp32_layernorm else {}
     )
 
-    @torch.compile(backend="inductor")
-    def compiled_fn(x, w, b):
-        return layernorm_fn(x, w, b)
-
     with unittest.mock.patch.dict(os.environ, env_patch):
         torch._dynamo.reset()
+        import glob
+        for d in glob.glob("/tmp/torchinductor_*"):
+            shutil.rmtree(d, ignore_errors=True)
+
+        @torch.compile(backend="inductor")
+        def compiled_fn(x, w, b):
+            return layernorm_fn(x, w, b)
+
         out = compiled_fn(x_dev, w_dev, b_dev)
 
     return out.cpu().float()

@@ -49,12 +49,14 @@ SPYRE_FP32_OPS = [
     "topkvalue",
     "topkindex",
     "floor",
+    "to_dtype",
 ]
 
 TOPK_OPS = {"topkvalue", "topkindex"}
 
 LAYOUT_LABELS = ["OUTPUT", "KERNEL", "INPUT", "KERNEL_IDX"]
 MATMUL_LAYOUT_LABELS = ["INPUT", "KERNEL", "OUTPUT", "KERNEL_IDX"]
+FORMAT_CONVERT_LAYOUT_LABELS = ["INPUT", "OUTPUT", "KERNEL", "KERNEL_IDX"]
 
 
 # Populate more valid labels from deeptools here if needed
