@@ -634,6 +634,10 @@ class SpyreKernel(Kernel[CSEVariable]):
                             + "},"
                         )
                         buf.writeline(f"op_info={_serialize_value(op_spec.op_info)},")
+                        if op_spec.op_data_format is not None:
+                            buf.writeline(
+                                f"op_data_format={op_spec.op_data_format},"
+                            )
                         buf.writeline("args=[")
                         with buf.indent():
                             for arg in op_spec.args:

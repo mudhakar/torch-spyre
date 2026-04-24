@@ -13,6 +13,7 @@
 # limitations under the License.
 
 from contextlib import contextmanager
+import os
 
 import math
 from typing import Optional, Union, Sequence, Callable, TypeVar
@@ -455,9 +456,18 @@ def spyre_layer_norm(
             f"spyre_layer_norm: only supports spyre device with normalized_shape of length 1, "
             f"got device={input.device.type}, normalized_shape={normalized_shape}"
         )
+    fp32_ln = os.environ.get("TORCH_SPYRE_FP32_LAYERNORM", "0") == "1"
+    if fp32_ln:
+        orig_dtype = input.dtype
+        input = input.to(torch.float32)
+        weight = weight.to(torch.float32) if weight is not None else None
+        bias = bias.to(torch.float32) if bias is not None else None
     mean = torch.ops.spyre.exx2(input, 1.0 / normalized_shape[0], False)
     norm_mean = torch.ops.spyre.layernormscale(mean, eps)
-    return torch.ops.spyre.layernormnorm(input, mean, norm_mean, weight, bias)
+    result = torch.ops.spyre.layernormnorm(input, mean, norm_mean, weight, bias)
+    if fp32_ln:
+        result = result.to(orig_dtype)
+    return result
 
 
 @register_spyre_decomposition([torch.ops.aten.gelu.default])

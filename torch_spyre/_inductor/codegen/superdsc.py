@@ -339,8 +339,21 @@ def _create_sdsc_tensors(
     return sdsc_args, layouts, missing_dim
 
 
-def _get_op_func(op: str, is_reduction: bool, output_scales: dict) -> str:
-    if op == "to_dtype" or op == "overwrite":
+FORMAT_CONVERT_OP = "format_convert"
+
+
+def _get_op_func(
+    op: str, is_reduction: bool, output_scales: dict, args: list | None = None
+) -> str:
+    if op == "to_dtype":
+        if (
+            args is not None
+            and len(args) >= 2
+            and args[0].data_format != args[-1].data_format
+        ):
+            return FORMAT_CONVERT_OP
+        return IDENTITY_OP
+    if op == "overwrite":
         return IDENTITY_OP
     if is_reduction and not _is_matmul(op) and -2 not in output_scales.values():
         return op + "nonstick"
@@ -407,9 +420,15 @@ def parse_op_spec(op_spec: OpSpec) -> SDSCSpec:
     ref_arg = _ref_arg(op_spec)
     op_dim_order, op_stick_dim = _get_device_dim_order(ref_arg, symbol_mapping)
 
+    effective_data_format = (
+        op_spec.op_data_format
+        if op_spec.op_data_format is not None
+        else op_spec.args[0].device_dtype
+    )
+
     if op_stick_dim is None:
         stick_sym = Symbol(INPUT_DIM_LABELS[ndim])
-        sdsc_iteration_space[stick_sym] = op_spec.args[0].device_dtype.elems_per_stick()
+        sdsc_iteration_space[stick_sym] = effective_data_format.elems_per_stick()
         work_slices[stick_sym] = 1
         dim_splits[stick_sym] = 1
 
@@ -420,9 +439,6 @@ def parse_op_spec(op_spec: OpSpec) -> SDSCSpec:
         op_dim_order,
         op_stick_dim,
     )
-    if op_spec.op_data_format is not None:
-        for sdsc_arg in args:
-            sdsc_arg.data_format = op_spec.op_data_format
     if missing_dim is not None:
         # A dimension was added to the iteration space, update splits and work slices
         dim_splits[missing_dim] = 1
@@ -445,10 +461,12 @@ def parse_op_spec(op_spec: OpSpec) -> SDSCSpec:
     num_inputs = len(args[:-1]) if is_matmul or not op_spec.is_reduction else len(args)
 
     return SDSCSpec(
-        opfunc=_get_op_func(op_spec.op, op_spec.is_reduction, args[-1].scales),
+        opfunc=_get_op_func(op_spec.op, op_spec.is_reduction, args[-1].scales, args),
         execution_unit="pt" if is_matmul else "sfp",
         data_format=op_spec.op_data_format
         if op_spec.op_data_format is not None
+        else op_spec.args[-1].device_dtype
+        if op_spec.op == "to_dtype"
         else op_spec.args[0].device_dtype,
         num_inputs=num_inputs,
         iteration_space=sdsc_iteration_space,
