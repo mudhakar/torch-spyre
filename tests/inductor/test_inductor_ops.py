@@ -12,8 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
+import unittest.mock
+
 import pytest
-import unittest
 import torch
 
 from utils_inductor import (
@@ -1568,6 +1570,15 @@ class TestOps(unittest.TestCase, metaclass=ParameterizedTestMeta):
             },
         },
         ("test_layernorm", "test_layernorm_cpu"): {
+            "param_sets": {
+                "2d": (
+                    cached_randn((256, 128), dtype=torch.float16),  # input
+                    cached_randn((128), dtype=torch.float16),  # weight
+                    torch.zeros([128], dtype=torch.float16),  # bias
+                ),
+            },
+        },
+        ("test_layernorm_fp32", "test_layernorm_fp32_cpu"): {
             "param_sets": {
                 "2d": (
                     cached_randn((256, 128), dtype=torch.float16),  # input
@@ -3392,6 +3403,17 @@ class TestOps(unittest.TestCase, metaclass=ParameterizedTestMeta):
             )
 
         self.compare_with_cpu(fn, input, weight, bias)
+
+    def test_layernorm_fp32_cpu(self, input, weight, bias):
+        def fn(input, weight, bias):
+            return torch.nn.functional.layer_norm(
+                input, input.shape[1:], weight=weight, bias=bias
+            )
+
+        with unittest.mock.patch.dict(
+            os.environ, {"TORCH_SPYRE_FP32_LAYERNORM": "1"}
+        ):
+            compare_with_cpu(fn, input, weight, bias)
 
     @pytest.mark.filterwarnings("ignore::torch_spyre.ops.fallbacks.FallbackWarning")
     def test_rmsnorm_cpu(self, x):
