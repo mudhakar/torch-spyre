@@ -21,6 +21,7 @@ from sympy import Integer, Symbol, Expr, Mod, floor
 from torch._inductor.virtualized import V
 from torch_spyre._C import DataFormats
 from torch_spyre._inductor.constants import (
+    FORMAT_CONVERT_LAYOUT_LABELS,
     IDENTITY_OP,
     INPUT_DIM_LABELS,
     OUTPUT_DIM_LABELS,
@@ -260,7 +261,19 @@ def _create_sdsc_tensors(
 ) -> tuple[list[SDSCArgs], dict, Symbol | None]:
     dims = list(iteration_space.keys())
     layouts: dict = {}
-    use_op_dims = not _is_matmul(op_spec.op)
+    is_matmul = _is_matmul(op_spec.op)
+    use_op_dims = not is_matmul
+    is_format_convert = (
+        op_spec.op == "to_dtype"
+        and len(op_spec.args) >= 2
+        and op_spec.args[0].device_dtype != op_spec.args[-1].device_dtype
+    )
+    if is_matmul:
+        layout_labels = MATMUL_LAYOUT_LABELS
+    elif is_format_convert:
+        layout_labels = FORMAT_CONVERT_LAYOUT_LABELS
+    else:
+        layout_labels = LAYOUT_LABELS
 
     missing_dim = None
     adjusted_output_size = op_spec.args[-1].device_size.copy()
@@ -325,7 +338,7 @@ def _create_sdsc_tensors(
             dim_order,
             effective_stick,
             arg.device_dtype.elems_per_stick(),
-            MATMUL_LAYOUT_LABELS if not use_op_dims else LAYOUT_LABELS,
+            layout_labels,
         )
         sdsc_args.append(
             SDSCArgs(
