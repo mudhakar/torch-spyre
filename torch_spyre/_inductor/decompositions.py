@@ -724,6 +724,46 @@ def pad_decomp(
     return output
 
 
+@register_spyre_decomposition([torch.ops.aten._adaptive_avg_pool2d.default])
+def spyre_adaptive_avg_pool2d(
+    input: torch.Tensor, output_size: list[int]
+) -> torch.Tensor:
+    """Decompose adaptive_avg_pool2d into two-pass mean for Spyre.
+
+    F.interpolate(mode="area") dispatches to adaptive_avg_pool2d. Inductor's
+    default decomposition expands this into nested pointwise adds + mul(1/N)
+    which Spyre codegen cannot handle. Instead, decompose into two sequential
+    mean reductions (height then width) which map to deeptools' mean OpFunc.
+
+    Only supports the case where input spatial dims are evenly divisible by
+    output_size (i.e. non-overlapping integer-ratio pooling).
+    """
+    H, W = input.shape[-2], input.shape[-1]
+    oH, oW = output_size
+
+    kH = H // oH
+    kW = W // oW
+    if H != oH * kH or W != oW * kW:
+        raise Unsupported(
+            f"adaptive_avg_pool2d: input size ({H}, {W}) must be evenly "
+            f"divisible by output_size ({oH}, {oW}) on Spyre"
+        )
+
+    batch_shape = list(input.shape[:-2])
+
+    # Pass 1: mean over height windows
+    # [*, H, W] → [*, oH, kH, W] → mean(dim=-2) → [*, oH, W]
+    x = input.reshape(batch_shape + [oH, kH, W])
+    x = x.mean(dim=-2)
+
+    # Pass 2: mean over width windows
+    # [*, oH, W] → [*, oH, oW, kW] → mean(dim=-1) → [*, oH, oW]
+    x = x.reshape(batch_shape + [oH, oW, kW])
+    x = x.mean(dim=-1)
+
+    return x
+
+
 @register_spyre_decomposition([torch.ops.aten.bitwise_not])
 def bitwise_not(input: torch.Tensor) -> torch.Tensor:
     if input.dtype is torch.bool:
