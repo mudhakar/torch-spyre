@@ -749,23 +749,22 @@ def spyre_adaptive_avg_pool2d(
             f"divisible by output_size ({oH}, {oW}) on Spyre"
         )
 
-    batch_shape = list(input.shape[:-2])
+    # Use purely 4D pointwise additions to avoid 5D tensors, non-stick
+    # reductions, and non-contiguous clones — all of which have issues on Spyre.
+    # For kH=kW=4 this is 6 adds + 1 mul (vs 15 adds + 1 mul in Inductor default).
 
-    # Both passes reduce over the last dimension (stick reduction) to avoid
-    # the meannonstick path which has indexing issues on Spyre.
+    # Sum kH adjacent rows: input[:,:,0::kH,:] + input[:,:,1::kH,:] + ...
+    x = input[:, :, 0::kH, :]
+    for i in range(1, kH):
+        x = x + input[:, :, i::kH, :]
 
-    # Pass 1: mean over height windows
-    # [*, H, W] → [*, oH, kH, W] → transpose → [*, oH, W, kH] → mean(dim=-1)
-    x = input.reshape(batch_shape + [oH, kH, W])
-    x = x.transpose(-2, -1).contiguous()
-    x = x.mean(dim=-1, dtype=input.dtype)
+    # Sum kW adjacent columns: x[:,:,:,0::kW] + x[:,:,:,1::kW] + ...
+    y = x[:, :, :, 0::kW]
+    for j in range(1, kW):
+        y = y + x[:, :, :, j::kW]
 
-    # Pass 2: mean over width windows
-    # [*, oH, W] → [*, oH, oW, kW] → mean(dim=-1) → [*, oH, oW]
-    x = x.reshape(batch_shape + [oH, oW, kW])
-    x = x.mean(dim=-1, dtype=input.dtype)
-
-    return x
+    # Divide by pool size to get mean
+    return y * (1.0 / (kH * kW))
 
 
 @register_spyre_decomposition([torch.ops.aten.bitwise_not])
