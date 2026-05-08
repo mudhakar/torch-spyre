@@ -751,10 +751,14 @@ def spyre_adaptive_avg_pool2d(
 
     batch_shape = list(input.shape[:-2])
 
-    # Pass 1: mean over height windows (stay in input dtype, no fp32 upcast)
-    # [*, H, W] → [*, oH, kH, W] → mean(dim=-2) → [*, oH, W]
+    # Both passes reduce over the last dimension (stick reduction) to avoid
+    # the meannonstick path which has indexing issues on Spyre.
+
+    # Pass 1: mean over height windows
+    # [*, H, W] → [*, oH, kH, W] → transpose → [*, oH, W, kH] → mean(dim=-1)
     x = input.reshape(batch_shape + [oH, kH, W])
-    x = x.mean(dim=-2, dtype=input.dtype)
+    x = x.transpose(-2, -1).contiguous()
+    x = x.mean(dim=-1, dtype=input.dtype)
 
     # Pass 2: mean over width windows
     # [*, oH, W] → [*, oH, oW, kW] → mean(dim=-1) → [*, oH, oW]
