@@ -751,15 +751,15 @@ def spyre_adaptive_avg_pool2d(
 
     batch_shape = list(input.shape[:-2])
 
-    # Pass 1: mean over height windows
+    # Pass 1: mean over height windows (stay in input dtype, no fp32 upcast)
     # [*, H, W] → [*, oH, kH, W] → mean(dim=-2) → [*, oH, W]
     x = input.reshape(batch_shape + [oH, kH, W])
-    x = x.mean(dim=-2)
+    x = x.mean(dim=-2, dtype=input.dtype)
 
     # Pass 2: mean over width windows
     # [*, oH, W] → [*, oH, oW, kW] → mean(dim=-1) → [*, oH, oW]
     x = x.reshape(batch_shape + [oH, oW, kW])
-    x = x.mean(dim=-1)
+    x = x.mean(dim=-1, dtype=input.dtype)
 
     return x
 
