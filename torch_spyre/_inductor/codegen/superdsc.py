@@ -238,15 +238,12 @@ def _get_layout_label(
     stick_dim_order: Symbol | None,
     stick_size: int,
     layout_labels: list[str],
-    reduced_dims: list | None = None,
 ) -> str:
-    reduced = frozenset(reduced_dims or [])
     for label, layout in layouts.items():
         if (
             layout["stick_dim_order"] == stick_dim_order
             and Counter(layout["dim_order"]) == Counter(dim_order)
             and layout["stick_size"] == stick_size
-            and layout.get("reduced_dims", frozenset()) == reduced
         ):
             return label
     label = layout_labels[len(layouts)]
@@ -254,7 +251,6 @@ def _get_layout_label(
         "dim_order": dim_order,
         "stick_dim_order": stick_dim_order,
         "stick_size": stick_size,
-        "reduced_dims": reduced,
     }
     return label
 
@@ -344,6 +340,13 @@ def _create_sdsc_tensors(
         if use_op_dims and dim_order != dims and not _is_topk(op_spec.op):
             reduced_dims = [d for d in op_dim_order if d not in dim_order]
             dim_order = dim_order + reduced_dims
+        # For fp32 reductions, use physical layout (without reduced dims) so the
+        # DDL can distinguish input (more dims) from output (fewer dims).
+        # fp16 DDL uses a shared global_layout and needs both to match.
+        if reduced_dims and arg.device_dtype == DataFormats.IEEE_FP32:
+            layout_dim_order = [d for d in dim_order if d not in reduced_dims]
+        else:
+            layout_dim_order = dim_order
 
         if op_stick_dim is None:
             # No stick dim found in op - add one
@@ -385,11 +388,10 @@ def _create_sdsc_tensors(
         effective_stick = op_stick_dim if stick_dim is None else stick_dim
         label = _get_layout_label(
             layouts,
-            dim_order,
+            layout_dim_order,
             effective_stick,
             arg.device_dtype.elems_per_stick(),
             MATMUL_LAYOUT_LABELS if not use_op_dims else LAYOUT_LABELS,
-            reduced_dims=reduced_dims,
         )
         # Change dataFormat_ value if needed.
         # This is a temporary workaround until the backend supports IEEE_INT32 in SDSC (deeptools issue #4307).
