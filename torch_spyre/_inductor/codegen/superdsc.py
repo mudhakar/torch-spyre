@@ -340,10 +340,16 @@ def _create_sdsc_tensors(
         if use_op_dims and dim_order != dims and not _is_topk(op_spec.op):
             reduced_dims = [d for d in op_dim_order if d not in dim_order]
             dim_order = dim_order + reduced_dims
-        # For fp32 reductions, use physical layout (without reduced dims) so the
-        # DDL can distinguish input (more dims) from output (fewer dims).
-        # fp16 DDL uses a shared global_layout and needs both to match.
-        if reduced_dims and arg.device_dtype == DataFormats.IEEE_FP32:
+        # For fp32 exx2/layernormscale, use physical layout (without reduced
+        # dims) so the fp32 DDL can distinguish input from output.
+        # Plain reductions (sum) keep reduced dims in the layout like fp16
+        # does — the output occupies a full stick with scale_=-2.
+        _fp32_split_ops = ("exx2", "layernormscale")
+        if (
+            reduced_dims
+            and arg.device_dtype == DataFormats.IEEE_FP32
+            and op_spec.op in _fp32_split_ops
+        ):
             layout_dim_order = [d for d in dim_order if d not in reduced_dims]
         else:
             layout_dim_order = dim_order
@@ -386,10 +392,14 @@ def _create_sdsc_tensors(
             max_dim_sizes[dim] = -1
 
         effective_stick = op_stick_dim if stick_dim is None else stick_dim
-        # For fp32 reductions, the stick dim may be the reduced dim which is
-        # excluded from layout_dim_order. Remap to the first layout dim so
-        # deeptools can compute stick-aligned buffer sizes.
-        if reduced_dims and arg.device_dtype == DataFormats.IEEE_FP32:
+        # For fp32 exx2/layernormscale, the stick dim may be the reduced dim
+        # which is excluded from layout_dim_order. Remap to the first layout
+        # dim so deeptools can compute stick-aligned buffer sizes.
+        if (
+            reduced_dims
+            and arg.device_dtype == DataFormats.IEEE_FP32
+            and op_spec.op in _fp32_split_ops
+        ):
             if effective_stick in reduced_dims and layout_dim_order:
                 effective_stick = layout_dim_order[0]
         label = _get_layout_label(
