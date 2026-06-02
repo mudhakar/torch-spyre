@@ -386,6 +386,12 @@ def _create_sdsc_tensors(
             max_dim_sizes[dim] = -1
 
         effective_stick = op_stick_dim if stick_dim is None else stick_dim
+        # For fp32 reductions, the stick dim may be the reduced dim which is
+        # excluded from layout_dim_order. Remap to the first layout dim so
+        # deeptools can compute stick-aligned buffer sizes.
+        if reduced_dims and arg.device_dtype == DataFormats.IEEE_FP32:
+            if effective_stick in reduced_dims and layout_dim_order:
+                effective_stick = layout_dim_order[0]
         label = _get_layout_label(
             layouts,
             layout_dim_order,
