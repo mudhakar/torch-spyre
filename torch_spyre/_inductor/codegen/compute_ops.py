@@ -438,7 +438,10 @@ def generate_sdsc(
                                         else {}
                                     ),
                                     "layoutDimOrder_": [
-                                        str(dim) for dim in tensor.dim_order
+                                        str(dim)
+                                        for dim in sdsc_spec.layouts[tensor.layout][
+                                            "dim_order"
+                                        ]
                                     ],
                                     "maxDimSizes_": [
                                         tensor.max_dim_sizes[dim]
