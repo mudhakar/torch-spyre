@@ -384,10 +384,11 @@ def lower_scaled_mm(
 
 @register_spyre_lowering(torch.ops.aten.mm.default)
 def lower_mm(x, y):
+    from . import config
+    from .work_division import compute_matmul_n_pad
+
     x.realize()
     y.realize()
-    x_loader = x.make_loader()
-    y_loader = y.make_loader()
 
     x_size = x.get_size()
     y_size = y.get_size()
@@ -395,6 +396,30 @@ def lower_mm(x, y):
     y_ndim = len(y_size)
 
     reduction_numel = x_size[-1]  # K
+
+    # Span padding (#1918): the weight lands on device with N as the outer stick
+    # dimension, so a large N with a prime/poorly-factored stick count cannot be
+    # split across cores by span reduction and the compile aborts with an EAR
+    # overflow. Pad N up to the nearest composite stick count here, then narrow
+    # the (independent) padded output columns back off below. Static shapes only.
+    true_n = y_size[-1]
+    n_pad = 0
+    if reduction_numel != 1 and y_ndim == 2:
+        try:
+            true_n_int, k_int = int(true_n), int(reduction_numel)
+        except TypeError:
+            true_n_int = None
+        if true_n_int is not None:
+            n_pad = compute_matmul_n_pad(
+                true_n_int, k_int, y.get_dtype(), config.sencores
+            )
+    if n_pad:
+        y = lower_constant_pad_nd(y, [0, n_pad], value=0)
+        y.realize()
+        y_size = y.get_size()
+
+    x_loader = x.make_loader()
+    y_loader = y.make_loader()
 
     # Handle 3D input with 2D weight (batched matmul)
     if x_ndim == 3 and y_ndim == 2:
@@ -440,6 +465,10 @@ def lower_mm(x, y):
             f"mm: x{list(x_size)} @ y{list(y_size)} -> {list(result_buf.get_size())}, "
             f"x_layout={x.get_layout()}, y_layout={y.get_layout()}, out_layout={result_buf.get_layout()}"
         )
+
+    # Narrow the padded N columns back off (stick-aligned; independent columns).
+    if n_pad:
+        result = ir.SliceView.create(result, len(ranges) - 1, 0, true_n_int)
 
     return result
 

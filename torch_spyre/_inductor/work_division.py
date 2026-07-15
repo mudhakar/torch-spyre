@@ -33,6 +33,7 @@ from torch._inductor.ir import (
 
 from torch._inductor.dependencies import MemoryDep
 from torch._inductor.graph import GraphLowering
+from torch_spyre._C import get_elem_in_stick
 
 from .errors import Unsupported
 from .constants import BATCH_MATMUL_OP, DEVICE_NAME, TOPK_OPS
@@ -61,6 +62,61 @@ logger = get_inductor_logger("work_division")
 
 # Maximum memory access span per core: 256MB hardware limit
 MAX_SPAN_BYTES = 256 * 1024 * 1024
+
+
+def _n_dim_has_valid_split(
+    n_sticks: int, max_sticks_per_core: int, max_cores: int
+) -> bool:
+    """True if ``n_sticks`` can be split across cores to fit the span limit.
+
+    Span reduction splits a stick dimension only along its *divisors*. A split
+    count ``d`` is legal when it divides ``n_sticks`` and leaves each core with
+    at most ``max_sticks_per_core`` sticks (so its per-core span <= the EAR
+    limit), while using no more than ``max_cores`` cores.
+    """
+    if max_sticks_per_core <= 0:
+        return False
+    required = -(-n_sticks // max_sticks_per_core)  # ceil
+    if required <= 1:
+        return True  # fits on a single core unsplit -> no span overflow
+    return any(n_sticks % d == 0 for d in range(required, max_cores + 1))
+
+
+def compute_matmul_n_pad(n: int, k: int, dtype, max_cores: int) -> int:
+    """Return elements to pad a matmul's N (output) dim so its per-core span fits.
+
+    The weight of an ``[M, N] = [M, K] @ [K, N]`` matmul lands on device with N
+    as the outer stick dimension: ``device_size = [N/stick, K, stick]``, so its
+    per-core span is ``(sticks_per_core) * K * stick * itemsize``. When the full
+    weight exceeds ``MAX_SPAN_BYTES`` the outer stick dim must be split across
+    cores, and span reduction can only split it along divisors of the stick
+    count. A prime (or poorly factored) stick count therefore cannot be split
+    and the compile aborts with an EAR overflow.
+
+    This returns the number of elements to append to N so the padded stick count
+    has a legal split. Returns 0 when no padding is needed (already splittable or
+    already within the span limit) or when padding cannot help (e.g. a single
+    core, or a single stick already exceeds the span).
+    """
+    stick = get_elem_in_stick(dtype)
+    stick_stride_bytes = k * stick * dtype.itemsize
+    if stick_stride_bytes <= 0:
+        return 0
+    max_sticks_per_core = MAX_SPAN_BYTES // stick_stride_bytes
+    if max_sticks_per_core <= 0:
+        # Even one stick's span exceeds the limit; splitting N cannot help.
+        return 0
+    n_sticks = -(-n // stick)  # ceil
+    if _n_dim_has_valid_split(n_sticks, max_sticks_per_core, max_cores):
+        return 0
+    # Smallest padded stick count that span reduction can legally split.
+    candidate = n_sticks + 1
+    limit = n_sticks + max_cores + 1  # a composite count always appears quickly
+    while candidate <= limit:
+        if _n_dim_has_valid_split(candidate, max_sticks_per_core, max_cores):
+            return (candidate - n_sticks) * stick
+        candidate += 1
+    return 0
 
 
 @dataclasses.dataclass
