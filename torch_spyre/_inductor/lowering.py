@@ -467,8 +467,12 @@ def lower_mm(x, y):
         )
 
     # Narrow the padded N columns back off (stick-aligned; independent columns).
+    # clone() materializes the slice into a real buffer so the result is a valid
+    # top-level IR node (a bare SliceView/ReinterpretView is not).
     if n_pad:
-        result = ir.SliceView.create(result, len(ranges) - 1, 0, true_n_int)
+        result = lowering.clone(
+            ir.SliceView.create(result, len(ranges) - 1, 0, true_n_int)
+        )
 
     return result
 
